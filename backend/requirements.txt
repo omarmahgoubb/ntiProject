@@ -1,0 +1,4 @@
+# backend/requirements.txt
+Flask
+psycopg2-binary
+
