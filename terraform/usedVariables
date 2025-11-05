@@ -1,0 +1,36 @@
+# ---------- Project-wide (safe vars) ----------
+PROJECT_NAME=nti-app
+AWS_REGION=eu-west-1
+
+# VPC/Subnets (2 AZs)
+VPC_CIDR=10.0.0.0/16
+AZS='["eu-west-1a","eu-west-1b"]'
+PUBLIC_SUBNETS='["10.0.1.0/24","10.0.2.0/24"]'
+PRIVATE_SUBNETS='["10.0.11.0/24","10.0.12.0/24"]'
+
+# EKS
+EKS_VERSION=1.29
+NODE_INSTANCE_TYPES='["t3.small"]'
+NODE_MIN_SIZE=2
+NODE_DESIRED_SIZE=2
+NODE_MAX_SIZE=4
+
+# Jenkins
+JENKINS_INSTANCE_TYPE=t3.small
+JENKINS_KEY_NAME=nti-keypair
+ALLOWED_INGRESS_CIDRS='["0.0.0.0/0"]'
+
+# RDS
+DB_ENGINE=postgres
+DB_ENGINE_VERSION=17.6
+DB_NAME=taskdb
+DB_USERNAME=postgres
+DB_INSTANCE_CLASS=db.t4g.micro
+DB_ALLOCATED_STORAGE=20
+
+# S3 for ALB logs (edit if name is taken)
+ALB_LOGS_BUCKET_NAME=nti-alb-logs-omar
+ALB_LOGS_PREFIX=elb
+IMAGE_TAG=v1
+PROJECT_FRONTEND_REPO_NAME=project-frontend
+PROJECT_BACKEND_REPO_NAME=project-backend

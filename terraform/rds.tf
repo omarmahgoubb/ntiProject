@@ -1,67 +1,58 @@
-# Store DB creds in Secrets Manager (username fixed, password generated)
-resource "aws_secretsmanager_secret" "db_secret" {
-  name = "project-postgres-credentials"
+resource "aws_security_group" "rds_sg" {
+  name   = "${var.project_name}-rds-sg"
+  vpc_id = module.vpc.vpc_id
+  tags = { Project = var.project_name }
 }
 
-# Generate a strong password
-resource "random_password" "db_password" {
-  length           = 20
-  special          = true
-  override_special = "_%@!#-"   # avoid characters some clients dislike
+resource "aws_security_group_rule" "rds_ingress_pg" {
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  security_group_id = aws_security_group.rds_sg.id
+  cidr_blocks       = [var.vpc_cidr]
 }
 
-resource "aws_secretsmanager_secret_version" "db_secret_v" {
-  secret_id     = aws_secretsmanager_secret.db_secret.id
+resource "aws_db_subnet_group" "this" {
+  name       = "${var.project_name}-rds-subnets"
+  subnet_ids = module.vpc.private_subnets
+}
+
+resource "aws_db_instance" "this" {
+  identifier              = "${var.project_name}-rds"
+  engine                  = var.db_engine
+  engine_version          = var.db_engine_version
+  instance_class          = var.db_instance_class    # db.t3.small
+  allocated_storage       = var.db_allocated_storage
+  db_subnet_group_name    = aws_db_subnet_group.this.name
+  vpc_security_group_ids  = [aws_security_group.rds_sg.id]
+  db_name                 = var.db_name
+  username                = var.db_username
+  password                = var.db_password
+  publicly_accessible     = false
+  skip_final_snapshot     = true
+  storage_encrypted       = true
+  deletion_protection     = false
+  apply_immediately       = true
+  backup_retention_period = 7
+}
+
+resource "aws_secretsmanager_secret" "db" {
+  name = "${var.project_name}/rds/postgres"
+  tags = { Project = var.project_name }
+}
+
+resource "aws_secretsmanager_secret_version" "db" {
+  secret_id     = aws_secretsmanager_secret.db.id
   secret_string = jsonencode({
-    username = "masteruser"                      # NOT 'admin' (reserved)
-    password = random_password.db_password.result
+    username = var.db_username,
+    password = var.db_password,
+    engine   = var.db_engine,
+    host     = aws_db_instance.this.address,
+    port     = 5432,
+    dbname   = var.db_name
   })
 }
 
-# DB subnet group (use our two public subnets)
-resource "aws_db_subnet_group" "project_db_subnets" {
-  name       = "project-db-subnets"
-  subnet_ids = [aws_subnet.public_subnet_a.id, aws_subnet.public_subnet_b.id]
-  tags = { Name = "project-db-subnets" }
-}
-
-# Security group for DB (allow 5432 from your IP)
-resource "aws_security_group" "db_sg" {
-  name        = "project-db-sg"
-  description = "Allow PostgreSQL from my IP"
-  vpc_id      = aws_vpc.project_vpc.id
-
-  ingress {
-    description = "Postgres"
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = [var.my_ip_cidr]
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-# RDS PostgreSQL (publicly accessible)
-resource "aws_db_instance" "project_db" {
-  identifier               = "project-db"
-  engine                   = "postgres"
-  instance_class           = "db.t3.micro"
-  allocated_storage        = 20
-
-  username                 = jsondecode(aws_secretsmanager_secret_version.db_secret_v.secret_string)["username"]
-  password                 = jsondecode(aws_secretsmanager_secret_version.db_secret_v.secret_string)["password"]
-
-  db_subnet_group_name     = aws_db_subnet_group.project_db_subnets.name
-  vpc_security_group_ids   = [aws_security_group.db_sg.id]
-  publicly_accessible      = true
-
-  skip_final_snapshot      = true
-  delete_automated_backups = true
-
-  depends_on = [aws_db_subnet_group.project_db_subnets]
-}
+output "rds_endpoint"   { value = aws_db_instance.this.address }
+output "rds_secret_arn" { value = aws_secretsmanager_secret.db.arn }

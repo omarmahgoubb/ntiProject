@@ -1,60 +1,34 @@
-# Security group for EKS cluster endpoint
-resource "aws_security_group" "eks_cluster_sg" {
-  name        = "eks-cluster-sg"
-  description = "Allow EKS cluster communication"
-  vpc_id      = aws_vpc.project_vpc.id
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~> 20.8"
 
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+  cluster_name    = "${var.project_name}-eks"
+  cluster_version = var.eks_version
+
+  # PUBLIC endpoint enabled so you can reach it from home
+  cluster_endpoint_public_access  = true
+  cluster_endpoint_private_access = false
+  cluster_endpoint_public_access_cidrs = ["0.0.0.0/0"]
+
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnets
+
+  enable_irsa = true
+
+  eks_managed_node_group_defaults = { ami_type = "AL2_x86_64" }
+
+  eks_managed_node_groups = {
+    default = {
+      instance_types = var.node_instance_types     # ["t3.small"]
+      min_size       = var.node_min_size           # 2
+      desired_size   = var.node_desired_size       # 2
+      max_size       = var.node_max_size           # 4
+      subnet_ids     = module.vpc.private_subnets
+    }
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  tags = { Project = var.project_name }
 }
 
-# EKS Cluster
-resource "aws_eks_cluster" "project_cluster" {
-  name     = var.eks_cluster_name
-  role_arn = aws_iam_role.eks_cluster_role.arn
-
-  vpc_config {
-    subnet_ids          = [aws_subnet.public_subnet_a.id, aws_subnet.public_subnet_b.id]
-    security_group_ids  = [aws_security_group.eks_cluster_sg.id]
-    endpoint_public_access = true
-  }
-}
-
-# EKS Managed Node Group
-resource "aws_eks_node_group" "project_nodes" {
-  cluster_name    = aws_eks_cluster.project_cluster.name
-  node_group_name = "${var.eks_cluster_name}-nodes"
-  node_role_arn   = aws_iam_role.eks_node_role.arn
-  subnet_ids      = [aws_subnet.public_subnet_a.id, aws_subnet.public_subnet_b.id]
-
-  scaling_config {
-    desired_size = 2
-    max_size     = 3
-    min_size     = 1
-  }
-
-  instance_types = ["t3.micro"]
-  disk_size      = 20
-
-  tags = {
-    Name = "${var.eks_cluster_name}-node"
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_worker_node_policy,
-    aws_iam_role_policy_attachment.eks_cni_policy,
-    aws_iam_role_policy_attachment.ec2_registry_policy
-  ]
-}
-
+output "cluster_name"     { value = module.eks.cluster_name }
+output "cluster_endpoint" { value = module.eks.cluster_endpoint }

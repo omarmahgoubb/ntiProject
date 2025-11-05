@@ -1,23 +1,20 @@
-# Backup vault
-resource "aws_backup_vault" "jenkins_vault" {
-  name = "jenkins-backup-vault"
+resource "aws_backup_vault" "vault" {
+  name = "${var.project_name}-backup-vault"
 }
 
-# Daily backup plan @ 00:00 UTC, keep 7 days
-resource "aws_backup_plan" "jenkins_plan" {
-  name = "jenkins-backup-plan"
+resource "aws_backup_plan" "plan" {
+  name = "${var.project_name}-daily-plan"
   rule {
-    rule_name         = "daily-backup"
-    target_vault_name = aws_backup_vault.jenkins_vault.name
-    schedule          = "cron(0 0 * * ? *)"
-    lifecycle { delete_after = 7 }
+    rule_name         = "daily-snapshots"
+    target_vault_name = aws_backup_vault.vault.name
+    schedule          = "cron(0 21 * * ? *)" # ~11PM Cairo
+    lifecycle { delete_after = 14 }
   }
 }
 
-# Protect the Jenkins EC2 instance
-resource "aws_backup_selection" "jenkins_selection" {
+resource "aws_backup_selection" "jenkins" {
   name         = "jenkins-selection"
-  plan_id      = aws_backup_plan.jenkins_plan.id
-  iam_role_arn = aws_iam_role.backup_role.arn
+  iam_role_arn = aws_iam_role.backup.arn
   resources    = [aws_instance.jenkins.arn]
+  plan_id      = aws_backup_plan.plan.id
 }

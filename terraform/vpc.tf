@@ -1,66 +1,20 @@
-# VPC
-resource "aws_vpc" "project_vpc" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_support   = true
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.1"
+
+  name = "${var.project_name}-vpc"
+  cidr = var.vpc_cidr
+
+  azs             = var.azs
+  public_subnets  = var.public_subnets
+  private_subnets = var.private_subnets
+
+  enable_nat_gateway   = true
+  single_nat_gateway   = true
   enable_dns_hostnames = true
 
-  tags = {
-    Name = "project-vpc"
-  }
+  tags = { Project = var.project_name }
 }
-
-# Internet Gateway
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.project_vpc.id
-  tags = {
-    Name = "project-igw"
-  }
-}
-
-# Public Subnet 1 (eu-west-1a)
-resource "aws_subnet" "public_subnet_a" {
-  vpc_id                  = aws_vpc.project_vpc.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "eu-west-1a"
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "public-subnet-a"
-  }
-}
-
-# Public Subnet 2 (eu-west-1b)
-resource "aws_subnet" "public_subnet_b" {
-  vpc_id                  = aws_vpc.project_vpc.id
-  cidr_block              = "10.0.2.0/24"
-  availability_zone       = "eu-west-1b"
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "public-subnet-b"
-  }
-}
-
-# Public Route Table
-resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.project_vpc.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
-
-  tags = {
-    Name = "public-rt"
-  }
-}
-
-# Associate subnets with route table
-resource "aws_route_table_association" "a" {
-  subnet_id      = aws_subnet.public_subnet_a.id
-  route_table_id = aws_route_table.public_rt.id
-}
-resource "aws_route_table_association" "b" {
-  subnet_id      = aws_subnet.public_subnet_b.id
-  route_table_id = aws_route_table.public_rt.id
-}
+output "vpc_id"             { value = module.vpc.vpc_id }
+output "public_subnet_ids"  { value = module.vpc.public_subnets }
+output "private_subnet_ids" { value = module.vpc.private_subnets }

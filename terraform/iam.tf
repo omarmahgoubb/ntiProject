@@ -1,68 +1,34 @@
-# Cluster role
-data "aws_iam_policy_document" "eks_cluster_assume" {
-  statement {
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["eks.amazonaws.com"]
-    }
-    actions = ["sts:AssumeRole"]
-  }
+resource "aws_iam_role" "jenkins" {
+  name = "${var.project_name}-jenkins-role"
+  assume_role_policy = jsonencode({
+    Version="2012-10-17", Statement=[{
+      Effect="Allow", Principal={Service="ec2.amazonaws.com"}, Action="sts:AssumeRole"
+    }]
+  })
 }
-resource "aws_iam_role" "eks_cluster_role" {
-  name               = "eks-cluster-role"
-  assume_role_policy = data.aws_iam_policy_document.eks_cluster_assume.json
+resource "aws_iam_role_policy_attachment" "jenkins_ecr" {
+  role       = aws_iam_role.jenkins.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
 }
-resource "aws_iam_role_policy_attachment" "eks_cluster_attach" {
-  role       = aws_iam_role.eks_cluster_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+resource "aws_iam_role_policy_attachment" "jenkins_ssm" {
+  role       = aws_iam_role.jenkins.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
-
-# Node role
-data "aws_iam_policy_document" "eks_node_assume" {
-  statement {
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-    actions = ["sts:AssumeRole"]
-  }
-}
-resource "aws_iam_role" "eks_node_role" {
-  name               = "eks-node-role"
-  assume_role_policy = data.aws_iam_policy_document.eks_node_assume.json
-}
-resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
-  role       = aws_iam_role.eks_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-}
-resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
-  role       = aws_iam_role.eks_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
-resource "aws_iam_role_policy_attachment" "ec2_registry_policy" {
-  role       = aws_iam_role.eks_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+resource "aws_iam_instance_profile" "jenkins" {
+  name = "${var.project_name}-jenkins-profile"
+  role = aws_iam_role.jenkins.name
 }
 
 # Backup role
-data "aws_iam_policy_document" "backup_assume" {
-  statement {
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["backup.amazonaws.com"]
-    }
-    actions = ["sts:AssumeRole"]
-  }
-}
-resource "aws_iam_role" "backup_role" {
-  name               = "aws-backup-role"
-  assume_role_policy = data.aws_iam_policy_document.backup_assume.json
+resource "aws_iam_role" "backup" {
+  name = "${var.project_name}-backup-role"
+  assume_role_policy = jsonencode({
+    Version="2012-10-17", Statement=[{
+      Effect="Allow", Principal={Service="backup.amazonaws.com"}, Action="sts:AssumeRole"
+    }]
+  })
 }
 resource "aws_iam_role_policy_attachment" "backup_attach" {
-  role       = aws_iam_role.backup_role.name
+  role       = aws_iam_role.backup.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
 }
-
